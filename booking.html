@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Enter your passenger details and confirm your bus booking with Nilambari Travels.">
+  <title>Booking Details – Nilambari Travels</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="page">
+    <div class="container container--narrow">
+      <!-- Breadcrumb -->
+      <div id="breadcrumb"></div>
+
+      <!-- Stepper -->
+      <div id="stepper"></div>
+
+      <!-- Page Header -->
+      <div class="page-header" style="text-align:center;">
+        <h1 class="page-header__title">Passenger Details</h1>
+        <p class="page-header__subtitle" style="margin:0 auto;">
+          Fill in your details to confirm the booking
+        </p>
+      </div>
+
+      <!-- Booking Summary -->
+      <div class="glass-card booking-card" style="margin-bottom:var(--space-xl);">
+        <div style="margin-bottom:var(--space-lg);">
+          <h3 style="font-family:'Outfit',sans-serif; font-weight:700; margin-bottom:var(--space-sm);">
+            Booking Summary
+          </h3>
+          <div id="booking-summary" style="color:var(--text-secondary); font-size:0.9rem; line-height:1.8;"></div>
+        </div>
+      </div>
+
+      <!-- Booking Form -->
+      <div class="glass-card booking-card glass-card--no-hover">
+        <form id="booking-form" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="passenger-name">Full Name</label>
+            <input type="text" class="form-input" id="passenger-name"
+              placeholder="Enter your full name" autocomplete="name" maxlength="100">
+            <div class="form-error" id="name-error">Please enter your full name</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="passenger-phone">Phone Number</label>
+            <input type="tel" class="form-input" id="passenger-phone"
+              placeholder="Enter 10-digit phone number" autocomplete="tel" maxlength="10"
+              pattern="[0-9]{10}">
+            <div class="form-error" id="phone-error">Please enter a valid 10-digit phone number</div>
+          </div>
+
+          <div style="display:flex; gap:var(--space-md); flex-wrap:wrap; margin-top:var(--space-xl);">
+            <a href="seats.html" class="btn btn--secondary" style="flex:1; min-width:120px;">
+              ← Back
+            </a>
+            <button type="submit" class="btn btn--primary" style="flex:2; min-width:200px;" id="payment-btn">
+              Proceed to Payment →
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initPageCommon('');
+
+      // Breadcrumb
+      document.getElementById('breadcrumb').innerHTML = renderBreadcrumb([
+        { label: 'Home', href: 'index.html' },
+        { label: 'Results', href: 'results.html' },
+        { label: 'Seats', href: 'seats.html' },
+        { label: 'Booking' }
+      ]);
+
+      // Stepper
+      document.getElementById('stepper').innerHTML = renderStepper(4);
+
+      // Check state
+      const bus = AppState.selectedBus;
+      const seats = AppState.selectedSeats;
+      if (!bus || !seats || seats.length === 0) {
+        showToast('No seats selected. Please start over.', 'error');
+        setTimeout(() => window.location.href = 'index.html', 1500);
+        return;
+      }
+
+      // Booking summary
+      const summary = document.getElementById('booking-summary');
+      const { source, destination, date } = AppState.searchQuery;
+      summary.innerHTML = `
+        <div>🚌 <strong>${bus.name}</strong> (${bus.type})</div>
+        <div>📍 ${source || 'N/A'} → ${destination || 'N/A'}</div>
+        <div>📅 ${formatDate(date)}</div>
+        <div>🕐 ${bus.departure} — ${bus.arrival}</div>
+        <div>💺 Seats: <strong>${seats.sort((a,b)=>a-b).join(', ')}</strong></div>
+        <div>💰 Total: <strong style="color:var(--primary-400);">₹${seats.length * bus.price}</strong></div>
+      `;
+
+      // Restore passenger details
+      const nameInput = document.getElementById('passenger-name');
+      const phoneInput = document.getElementById('passenger-phone');
+      if (AppState.passengerDetails.name) nameInput.value = AppState.passengerDetails.name;
+      if (AppState.passengerDetails.phone) phoneInput.value = AppState.passengerDetails.phone;
+
+      // Allow only digits in phone
+      phoneInput.addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/[^0-9]/g, '');
+      });
+
+      // Form submit
+      document.getElementById('booking-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        let valid = true;
+
+        const name = nameInput.value.trim();
+        const phone = phoneInput.value.trim();
+
+        // Validate name
+        const nameErr = document.getElementById('name-error');
+        if (!name || name.length < 2) {
+          nameErr.classList.add('visible');
+          valid = false;
+        } else {
+          nameErr.classList.remove('visible');
+        }
+
+        // Validate phone
+        const phoneErr = document.getElementById('phone-error');
+        if (!phone || !/^[0-9]{10}$/.test(phone)) {
+          phoneErr.classList.add('visible');
+          valid = false;
+        } else {
+          phoneErr.classList.remove('visible');
+        }
+
+        if (!valid) {
+          showToast('Please fill all fields correctly', 'error');
+          return;
+        }
+
+        // Save and navigate
+        AppState.passengerDetails = { name, phone };
+        AppState.save();
+        window.location.href = 'payment.html';
+      });
+    });
+  </script>
+</body>
+</html>

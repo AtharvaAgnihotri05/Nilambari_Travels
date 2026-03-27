@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Admin login for Nilambari Travels management dashboard.">
+  <title>Admin Login – Nilambari Travels</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="page">
+    <section class="admin-login">
+      <div class="glass-card admin-login-card glass-card--no-hover animate-fade-in-up">
+        <div class="admin-login-card__icon">🔐</div>
+        <h1 style="font-family:'Outfit',sans-serif; font-size:1.5rem; font-weight:800; text-align:center; margin-bottom:var(--space-sm);">
+          Admin Login
+        </h1>
+        <p style="text-align:center; color:var(--text-secondary); font-size:0.9rem; margin-bottom:var(--space-xl);">
+          Enter your credentials to access the dashboard
+        </p>
+
+        <form id="admin-login-form" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="admin-username">Username</label>
+            <input type="text" class="form-input" id="admin-username"
+              placeholder="Enter username" autocomplete="username">
+            <div class="form-error" id="username-error">Username is required</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="admin-password">Password</label>
+            <input type="password" class="form-input" id="admin-password"
+              placeholder="Enter password" autocomplete="current-password">
+            <div class="form-error" id="password-error">Password is required</div>
+          </div>
+          <div class="form-error" id="login-error" style="text-align:center; margin-bottom:var(--space-md);">
+            Invalid username or password
+          </div>
+          <button type="submit" class="btn btn--accent btn--lg btn--block" id="login-btn">
+            🔑 Login
+          </button>
+        </form>
+
+        <div style="text-align:center; margin-top:var(--space-xl);">
+          <a href="index.html" style="font-size:0.85rem; color:var(--text-muted);">← Back to Home</a>
+        </div>
+
+        <div style="margin-top:var(--space-xl); padding:var(--space-md); background:rgba(99,102,241,0.08); border-radius:var(--radius-md); border:1px solid rgba(99,102,241,0.15);">
+          <p style="font-size:0.8rem; color:var(--text-muted); text-align:center;">
+            <strong style="color:var(--primary-400);">Demo Credentials</strong><br>
+            Username: <code style="color:var(--text-primary);">admin</code> &nbsp;|&nbsp;
+            Password: <code style="color:var(--text-primary);">1234</code>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initPageCommon('admin');
+
+      // If already logged in, redirect to dashboard
+      if (AppState.isAdminLoggedIn) {
+        window.location.href = 'admin-dashboard.html';
+        return;
+      }
+
+      const form = document.getElementById('admin-login-form');
+      const usernameInput = document.getElementById('admin-username');
+      const passwordInput = document.getElementById('admin-password');
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        let valid = true;
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        // Validate
+        const userErr = document.getElementById('username-error');
+        const passErr = document.getElementById('password-error');
+        const loginErr = document.getElementById('login-error');
+
+        loginErr.classList.remove('visible');
+
+        if (!username) { userErr.classList.add('visible'); valid = false; }
+        else { userErr.classList.remove('visible'); }
+
+        if (!password) { passErr.classList.add('visible'); valid = false; }
+        else { passErr.classList.remove('visible'); }
+
+        if (!valid) return;
+
+        // Static authentication
+        if (username === 'admin' && password === '1234') {
+          AppState.isAdminLoggedIn = true;
+          AppState.save();
+          showToast('Login successful! Welcome, Admin.', 'success');
+          setTimeout(() => {
+            window.location.href = 'admin-dashboard.html';
+          }, 800);
+        } else {
+          loginErr.classList.add('visible');
+          showToast('Invalid credentials', 'error');
+          // Shake animation
+          const card = document.querySelector('.admin-login-card');
+          card.style.animation = 'none';
+          void card.offsetHeight;
+          card.style.animation = 'shake 0.4s ease-in-out';
+        }
+      });
+    });
+  </script>
+  <style>
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-8px); }
+      50% { transform: translateX(8px); }
+      75% { transform: translateX(-4px); }
+    }
+  </style>
+</body>
+</html>

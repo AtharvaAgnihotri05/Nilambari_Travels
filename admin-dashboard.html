@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nilambari Travels Admin Dashboard - Manage buses, routes, pricing, and schedules.">
+  <title>Admin Dashboard – Nilambari Travels</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="page">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md);">
+        <div>
+          <h1 class="page-header__title">Admin Dashboard</h1>
+          <p class="page-header__subtitle">Manage your fleet, routes, pricing, and schedules</p>
+        </div>
+        <button class="btn btn--danger btn--sm" id="logout-btn">🚪 Logout</button>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="admin-grid" style="margin-bottom:var(--space-xl);">
+        <div class="glass-card" style="padding:var(--space-xl); text-align:center;">
+          <div style="font-size:2rem; font-weight:800; color:var(--primary-400); font-family:'Outfit',sans-serif;">5</div>
+          <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:var(--space-xs);">Total Buses</div>
+        </div>
+        <div class="glass-card" style="padding:var(--space-xl); text-align:center;">
+          <div style="font-size:2rem; font-weight:800; color:var(--success-400); font-family:'Outfit',sans-serif;">8</div>
+          <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:var(--space-xs);">Active Routes</div>
+        </div>
+        <div class="glass-card" style="padding:var(--space-xl); text-align:center;">
+          <div style="font-size:2rem; font-weight:800; color:var(--accent-400); font-family:'Outfit',sans-serif;">142</div>
+          <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:var(--space-xs);">Today's Bookings</div>
+        </div>
+        <div class="glass-card" style="padding:var(--space-xl); text-align:center;">
+          <div style="font-size:2rem; font-weight:800; color:var(--warning-400); font-family:'Outfit',sans-serif;">₹98K</div>
+          <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:var(--space-xs);">Today's Revenue</div>
+        </div>
+      </div>
+
+      <!-- Action Cards -->
+      <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:700; margin-bottom:var(--space-lg);">
+        Quick Actions
+      </h2>
+      <div class="admin-grid" id="admin-actions">
+        <div class="glass-card admin-action-card" onclick="openModal('add-bus')">
+          <div class="admin-action-card__icon admin-action-card__icon--bus">🚌</div>
+          <div class="admin-action-card__title">Add Bus</div>
+          <div class="admin-action-card__desc">Register a new bus to the fleet</div>
+        </div>
+        <div class="glass-card admin-action-card" onclick="openModal('set-price')">
+          <div class="admin-action-card__icon admin-action-card__icon--price">💰</div>
+          <div class="admin-action-card__title">Set Seat Price</div>
+          <div class="admin-action-card__desc">Update pricing for routes</div>
+        </div>
+        <div class="glass-card admin-action-card" onclick="openModal('update-route')">
+          <div class="admin-action-card__icon admin-action-card__icon--route">🗺️</div>
+          <div class="admin-action-card__title">Update Route</div>
+          <div class="admin-action-card__desc">Manage bus routes and stops</div>
+        </div>
+        <div class="glass-card admin-action-card" onclick="openModal('change-timing')">
+          <div class="admin-action-card__icon admin-action-card__icon--time">🕐</div>
+          <div class="admin-action-card__title">Change Timing</div>
+          <div class="admin-action-card__desc">Update departure and arrival times</div>
+        </div>
+      </div>
+
+      <!-- Bus Fleet Table -->
+      <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:700; margin:var(--space-2xl) 0 var(--space-lg);">
+        Bus Fleet
+      </h2>
+      <div class="glass-card glass-card--no-hover" style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border-glass);">
+              <th style="padding:var(--space-md) var(--space-lg); text-align:left; color:var(--text-secondary); font-weight:600; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">Bus Name</th>
+              <th style="padding:var(--space-md) var(--space-lg); text-align:left; color:var(--text-secondary); font-weight:600; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">Type</th>
+              <th style="padding:var(--space-md) var(--space-lg); text-align:left; color:var(--text-secondary); font-weight:600; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">Timing</th>
+              <th style="padding:var(--space-md) var(--space-lg); text-align:left; color:var(--text-secondary); font-weight:600; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">Price</th>
+              <th style="padding:var(--space-md) var(--space-lg); text-align:left; color:var(--text-secondary); font-weight:600; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">Rating</th>
+            </tr>
+          </thead>
+          <tbody id="fleet-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Overlay -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal__header">
+        <h3 class="modal__title" id="modal-title"></h3>
+        <button class="modal__close" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initPageCommon('admin');
+
+      // Check admin auth
+      if (!AppState.isAdminLoggedIn) {
+        showToast('Please login first', 'error');
+        setTimeout(() => window.location.href = 'admin-login.html', 1000);
+        return;
+      }
+
+      // Populate fleet table
+      const tbody = document.getElementById('fleet-table-body');
+      BUSES.forEach(bus => {
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid var(--border-glass)';
+        row.innerHTML = `
+          <td style="padding:var(--space-md) var(--space-lg); font-weight:600;">${bus.name}</td>
+          <td style="padding:var(--space-md) var(--space-lg);"><span class="badge badge--primary">${bus.type}</span></td>
+          <td style="padding:var(--space-md) var(--space-lg); color:var(--text-secondary);">${bus.departure} — ${bus.arrival}</td>
+          <td style="padding:var(--space-md) var(--space-lg); color:var(--primary-400); font-weight:700;">₹${bus.price}</td>
+          <td style="padding:var(--space-md) var(--space-lg);">⭐ ${bus.rating}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      // Logout
+      document.getElementById('logout-btn').addEventListener('click', () => {
+        AppState.isAdminLoggedIn = false;
+        AppState.save();
+        showToast('Logged out successfully', 'info');
+        setTimeout(() => window.location.href = 'admin-login.html', 800);
+      });
+
+      // Close modal on overlay click
+      document.getElementById('modal-overlay').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeModal();
+      });
+
+      // Close modal on Escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+      });
+    });
+
+    // Modal content definitions
+    const modalContents = {
+      'add-bus': {
+        title: '🚌 Add New Bus',
+        body: `
+          <form onsubmit="event.preventDefault(); showToast('Bus added successfully! (UI only)','success'); closeModal();">
+            <div class="form-group">
+              <label class="form-label">Bus Name</label>
+              <input type="text" class="form-input" placeholder="Enter bus name" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bus Type</label>
+              <select class="form-select" required>
+                <option value="">Select type</option>
+                <option>AC Sleeper</option>
+                <option>AC Seater</option>
+                <option>Non-AC Sleeper</option>
+                <option>Non-AC Seater</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Seats</label>
+              <input type="number" class="form-input" placeholder="e.g. 30" min="10" max="60" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block">Add Bus</button>
+          </form>
+        `
+      },
+      'set-price': {
+        title: '💰 Set Seat Price',
+        body: `
+          <form onsubmit="event.preventDefault(); showToast('Prices updated! (UI only)','success'); closeModal();">
+            <div class="form-group">
+              <label class="form-label">Select Bus</label>
+              <select class="form-select" required>
+                <option value="">Choose a bus</option>
+                ${BUSES.map(b => `<option>${b.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Price (₹)</label>
+              <input type="number" class="form-input" placeholder="Enter new price" min="100" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block">Update Price</button>
+          </form>
+        `
+      },
+      'update-route': {
+        title: '🗺️ Update Route',
+        body: `
+          <form onsubmit="event.preventDefault(); showToast('Route updated! (UI only)','success'); closeModal();">
+            <div class="form-group">
+              <label class="form-label">Select Bus</label>
+              <select class="form-select" required>
+                <option value="">Choose a bus</option>
+                ${BUSES.map(b => `<option>${b.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Source</label>
+              <select class="form-select" required>
+                <option value="">Select city</option>
+                ${CITIES.map(c => `<option>${c}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Destination</label>
+              <select class="form-select" required>
+                <option value="">Select city</option>
+                ${CITIES.map(c => `<option>${c}</option>`).join('')}
+              </select>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block">Update Route</button>
+          </form>
+        `
+      },
+      'change-timing': {
+        title: '🕐 Change Timing',
+        body: `
+          <form onsubmit="event.preventDefault(); showToast('Timing updated! (UI only)','success'); closeModal();">
+            <div class="form-group">
+              <label class="form-label">Select Bus</label>
+              <select class="form-select" required>
+                <option value="">Choose a bus</option>
+                ${BUSES.map(b => `<option>${b.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Departure Time</label>
+              <input type="time" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Arrival Time</label>
+              <input type="time" class="form-input" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block">Update Timing</button>
+          </form>
+        `
+      }
+    };
+
+    function openModal(type) {
+      const content = modalContents[type];
+      if (!content) return;
+
+      document.getElementById('modal-title').textContent = content.title;
+      document.getElementById('modal-body').innerHTML = content.body;
+      document.getElementById('modal-overlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('active');
+    }
+  </script>
+</body>
+</html>

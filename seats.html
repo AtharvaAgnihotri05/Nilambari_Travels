@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Select your preferred seats from the bus layout. Interactive seat selection with real-time availability.">
+  <title>Select Seats – Nilambari Travels</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="page">
+    <div class="container container--medium">
+      <!-- Breadcrumb -->
+      <div id="breadcrumb"></div>
+
+      <!-- Stepper -->
+      <div id="stepper"></div>
+
+      <!-- Page Header -->
+      <div class="page-header">
+        <h1 class="page-header__title" id="bus-name">Select Your Seats</h1>
+        <p class="page-header__subtitle" id="bus-info"></p>
+      </div>
+
+      <!-- Seat Grid -->
+      <div class="glass-card seat-grid-wrapper">
+        <div style="text-align:center; margin-bottom:var(--space-md); font-size:0.85rem; color:var(--text-muted);">
+          🚌 Front
+        </div>
+
+        <div class="seat-grid" id="seat-grid"></div>
+
+        <div style="text-align:center; margin-top:var(--space-md); font-size:0.85rem; color:var(--text-muted);">
+          Back
+        </div>
+
+        <!-- Legend -->
+        <div class="seat-legend">
+          <div class="seat-legend__item">
+            <div class="seat-legend__color seat-legend__color--available"></div>
+            Available
+          </div>
+          <div class="seat-legend__item">
+            <div class="seat-legend__color seat-legend__color--selected"></div>
+            Selected
+          </div>
+          <div class="seat-legend__item">
+            <div class="seat-legend__color seat-legend__color--booked"></div>
+            Booked
+          </div>
+        </div>
+
+        <!-- Selected Seats Summary -->
+        <div class="selected-seats-summary" id="seats-summary" style="display:none;">
+          <div class="selected-seats-summary__title">Selected Seats:</div>
+          <div class="selected-seats-summary__seats" id="selected-seats-tags"></div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display:flex; gap:var(--space-md); margin-top:var(--space-xl); flex-wrap:wrap;">
+        <a href="results.html" class="btn btn--secondary" style="flex:1; min-width:150px;">← Back to Results</a>
+        <button class="btn btn--primary" style="flex:2; min-width:200px;" id="proceed-btn" disabled>
+          Proceed to Booking →
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    let selectedSeats = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initPageCommon('');
+
+      // Breadcrumb
+      document.getElementById('breadcrumb').innerHTML = renderBreadcrumb([
+        { label: 'Home', href: 'index.html' },
+        { label: 'Results', href: 'results.html' },
+        { label: 'Select Seats' }
+      ]);
+
+      // Stepper
+      document.getElementById('stepper').innerHTML = renderStepper(3);
+
+      // Check if bus is selected
+      const bus = AppState.selectedBus;
+      if (!bus) {
+        showToast('No bus selected. Please search first.', 'error');
+        setTimeout(() => window.location.href = 'index.html', 1500);
+        return;
+      }
+
+      // Header
+      document.getElementById('bus-name').textContent = bus.name;
+      document.getElementById('bus-info').textContent =
+        `${bus.type} • ${bus.departure} — ${bus.arrival} • ₹${bus.price}/seat`;
+
+      // Restore selected seats
+      selectedSeats = AppState.selectedSeats || [];
+
+      // Render seat grid (5 columns: 2 seats | aisle | 2 seats, 6 rows = 30 seats max)
+      const seatGrid = document.getElementById('seat-grid');
+      let seatNum = 1;
+      const totalSeats = bus.totalSeats;
+      const rows = Math.ceil(totalSeats / 4); // 4 usable seats per row (5 cols, 1 aisle)
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < 5; col++) {
+          if (col === 2) {
+            // Aisle
+            const aisle = document.createElement('div');
+            aisle.className = 'aisle';
+            seatGrid.appendChild(aisle);
+            continue;
+          }
+
+          if (seatNum > totalSeats) {
+            const empty = document.createElement('div');
+            seatGrid.appendChild(empty);
+            seatNum++;
+            continue;
+          }
+
+          const seatEl = document.createElement('button');
+          seatEl.className = 'seat';
+          seatEl.textContent = seatNum;
+          seatEl.dataset.seat = seatNum;
+
+          if (bus.bookedSeats.includes(seatNum)) {
+            seatEl.classList.add('seat--booked');
+            seatEl.title = `Seat ${seatNum} - Booked`;
+            seatEl.disabled = true;
+          } else {
+            if (selectedSeats.includes(seatNum)) {
+              seatEl.classList.add('seat--selected');
+            }
+            seatEl.title = `Seat ${seatNum} - Available`;
+            seatEl.addEventListener('click', () => toggleSeat(seatNum, seatEl));
+          }
+
+          seatGrid.appendChild(seatEl);
+          seatNum++;
+        }
+      }
+
+      updateSeatsSummary();
+
+      // Proceed button
+      document.getElementById('proceed-btn').addEventListener('click', () => {
+        if (selectedSeats.length === 0) {
+          showToast('Please select at least one seat', 'error');
+          return;
+        }
+        AppState.selectedSeats = selectedSeats;
+        AppState.save();
+        window.location.href = 'booking.html';
+      });
+    });
+
+    function toggleSeat(seatNum, seatEl) {
+      const index = selectedSeats.indexOf(seatNum);
+      if (index > -1) {
+        selectedSeats.splice(index, 1);
+        seatEl.classList.remove('seat--selected');
+      } else {
+        if (selectedSeats.length >= 6) {
+          showToast('You can select a maximum of 6 seats', 'error');
+          return;
+        }
+        selectedSeats.push(seatNum);
+        seatEl.classList.add('seat--selected');
+      }
+      updateSeatsSummary();
+    }
+
+    function updateSeatsSummary() {
+      const summary = document.getElementById('seats-summary');
+      const tags = document.getElementById('selected-seats-tags');
+      const proceedBtn = document.getElementById('proceed-btn');
+
+      if (selectedSeats.length > 0) {
+        summary.style.display = 'block';
+        tags.innerHTML = selectedSeats
+          .sort((a, b) => a - b)
+          .map(s => `<span class="selected-seat-tag">Seat ${s}</span>`)
+          .join('');
+        proceedBtn.disabled = false;
+      } else {
+        summary.style.display = 'none';
+        proceedBtn.disabled = true;
+      }
+    }
+  </script>
+</body>
+</html>

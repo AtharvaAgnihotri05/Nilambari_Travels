@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Complete your bus ticket payment securely with Nilambari Travels.">
+  <title>Payment – Nilambari Travels</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="page">
+    <div class="container container--narrow">
+      <!-- Breadcrumb -->
+      <div id="breadcrumb"></div>
+
+      <!-- Stepper -->
+      <div id="stepper"></div>
+
+      <!-- Page Header -->
+      <div class="page-header" style="text-align:center;">
+        <h1 class="page-header__title">Payment</h1>
+        <p class="page-header__subtitle" style="margin:0 auto;">
+          Review your booking and complete the payment
+        </p>
+      </div>
+
+      <!-- Payment Card -->
+      <div class="glass-card payment-card glass-card--no-hover" id="payment-card">
+        <!-- Will be populated by JS -->
+      </div>
+
+      <!-- Success Message (hidden initially) -->
+      <div id="success-section" style="display:none;">
+        <div class="glass-card glass-card--no-hover" style="padding:var(--space-2xl); max-width:550px; margin:0 auto;">
+          <div class="success-animation">
+            <div class="success-checkmark">
+              <span>✓</span>
+            </div>
+            <div class="success-text">Payment Successful! 🎉</div>
+            <p class="success-subtext">
+              Your booking has been confirmed. A confirmation will be sent to your phone.
+            </p>
+            <div id="success-details" style="text-align:left; margin:var(--space-xl) 0; padding:var(--space-lg); background:var(--bg-glass); border-radius:var(--radius-md); border:1px solid var(--border-glass);"></div>
+            <a href="index.html" class="btn btn--primary btn--lg btn--block" onclick="AppState.resetBooking()">
+              🏠 Back to Home
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initPageCommon('');
+
+      // Breadcrumb
+      document.getElementById('breadcrumb').innerHTML = renderBreadcrumb([
+        { label: 'Home', href: 'index.html' },
+        { label: 'Results', href: 'results.html' },
+        { label: 'Seats', href: 'seats.html' },
+        { label: 'Booking', href: 'booking.html' },
+        { label: 'Payment' }
+      ]);
+
+      // Stepper
+      document.getElementById('stepper').innerHTML = renderStepper(5);
+
+      // Check state
+      const bus = AppState.selectedBus;
+      const seats = AppState.selectedSeats;
+      const passenger = AppState.passengerDetails;
+      if (!bus || !seats || seats.length === 0 || !passenger.name) {
+        showToast('Missing booking information. Please start over.', 'error');
+        setTimeout(() => window.location.href = 'index.html', 1500);
+        return;
+      }
+
+      const { source, destination, date } = AppState.searchQuery;
+      const pricePerSeat = bus.price;
+      const totalAmount = seats.length * pricePerSeat;
+      const tax = Math.round(totalAmount * 0.05);
+      const grandTotal = totalAmount + tax;
+
+      // Render payment card
+      const paymentCard = document.getElementById('payment-card');
+      paymentCard.innerHTML = `
+        <h3 style="font-family:'Outfit',sans-serif; font-weight:700; margin-bottom:var(--space-lg); font-size:1.1rem;">
+          📋 Booking Summary
+        </h3>
+
+        <div class="payment-summary">
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Passenger</span>
+            <span class="payment-summary__value">${passenger.name}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Phone</span>
+            <span class="payment-summary__value">${passenger.phone}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Bus</span>
+            <span class="payment-summary__value">${bus.name}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Type</span>
+            <span class="payment-summary__value">${bus.type}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Route</span>
+            <span class="payment-summary__value">${source || 'N/A'} → ${destination || 'N/A'}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Date</span>
+            <span class="payment-summary__value">${formatDate(date)}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Timing</span>
+            <span class="payment-summary__value">${bus.departure} — ${bus.arrival}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Seats</span>
+            <span class="payment-summary__value">${seats.sort((a,b)=>a-b).join(', ')}</span>
+          </div>
+        </div>
+
+        <div class="payment-divider"></div>
+
+        <div class="payment-summary">
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Price per Seat</span>
+            <span class="payment-summary__value">₹${pricePerSeat}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Seats × ${seats.length}</span>
+            <span class="payment-summary__value">₹${totalAmount}</span>
+          </div>
+          <div class="payment-summary__row">
+            <span class="payment-summary__label">Service Tax (5%)</span>
+            <span class="payment-summary__value">₹${tax}</span>
+          </div>
+        </div>
+
+        <div class="payment-divider"></div>
+
+        <div class="payment-summary">
+          <div class="payment-summary__row">
+            <span class="payment-summary__label" style="font-weight:700; color:var(--text-primary);">Grand Total</span>
+            <span class="payment-summary__value payment-summary__total">₹${grandTotal}</span>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:var(--space-md); flex-wrap:wrap; margin-top:var(--space-xl);">
+          <a href="booking.html" class="btn btn--secondary" style="flex:1; min-width:120px;">
+            ← Back
+          </a>
+          <button class="btn btn--success btn--lg" style="flex:2; min-width:200px;" id="pay-btn">
+            💳 Pay ₹${grandTotal}
+          </button>
+        </div>
+      `;
+
+      // Pay button
+      document.getElementById('pay-btn').addEventListener('click', () => {
+        const payBtn = document.getElementById('pay-btn');
+        payBtn.disabled = true;
+        payBtn.innerHTML = '<div class="spinner" style="width:24px;height:24px;margin:0;border-width:2px;"></div>';
+
+        // Simulate payment processing
+        setTimeout(() => {
+          // Hide payment card, show success
+          document.getElementById('payment-card').style.display = 'none';
+          document.getElementById('stepper').innerHTML = '';
+          document.getElementById('breadcrumb').innerHTML = '';
+
+          const successSection = document.getElementById('success-section');
+          successSection.style.display = 'block';
+
+          // Booking ID
+          const bookingId = 'NLT' + Date.now().toString().slice(-8);
+
+          document.getElementById('success-details').innerHTML = `
+            <div style="font-size:0.9rem; line-height:2; color:var(--text-secondary);">
+              <div><strong>Booking ID:</strong> <span style="color:var(--primary-400); font-weight:700;">${bookingId}</span></div>
+              <div><strong>Passenger:</strong> ${passenger.name}</div>
+              <div><strong>Bus:</strong> ${bus.name} (${bus.type})</div>
+              <div><strong>Route:</strong> ${source} → ${destination}</div>
+              <div><strong>Date:</strong> ${formatDate(date)}</div>
+              <div><strong>Seats:</strong> ${seats.join(', ')}</div>
+              <div><strong>Amount Paid:</strong> <span style="color:var(--success-400); font-weight:700;">₹${grandTotal}</span></div>
+            </div>
+          `;
+
+          showToast('Payment Successful! 🎉', 'success');
+        }, 2000);
+      });
+    });
+  </script>
+</body>
+</html>

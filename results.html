@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Search results for available buses on your route. Compare prices, timings, and amenities.">
+  <title>Bus Results – Nilambari Travels</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar" id="navbar"></header>
+
+  <!-- Main Content -->
+  <main class="page">
+    <div class="container">
+      <!-- Breadcrumb -->
+      <div id="breadcrumb"></div>
+
+      <!-- Stepper -->
+      <div id="stepper"></div>
+
+      <!-- Page Header -->
+      <div class="page-header" id="page-header">
+        <h1 class="page-header__title">Available Buses</h1>
+        <p class="page-header__subtitle" id="route-info"></p>
+      </div>
+
+      <!-- Bus List -->
+      <div class="bus-list" id="bus-list"></div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initPageCommon('results');
+
+      // Breadcrumb
+      document.getElementById('breadcrumb').innerHTML = renderBreadcrumb([
+        { label: 'Home', href: 'index.html' },
+        { label: 'Search Results' }
+      ]);
+
+      // Stepper
+      document.getElementById('stepper').innerHTML = renderStepper(2);
+
+      // Route info
+      const { source, destination, date } = AppState.searchQuery;
+      const routeInfo = document.getElementById('route-info');
+      if (source && destination) {
+        routeInfo.textContent = `${source} → ${destination} • ${formatDate(date)}`;
+      } else {
+        routeInfo.textContent = 'Showing all available buses';
+      }
+
+      // Render bus cards
+      const busList = document.getElementById('bus-list');
+
+      BUSES.forEach(bus => {
+        const availableSeats = bus.totalSeats - bus.bookedSeats.length;
+        const card = document.createElement('div');
+        card.className = 'glass-card bus-card';
+        card.innerHTML = `
+          <div class="bus-card__info">
+            <div class="bus-card__name">${bus.name}</div>
+            <div class="bus-card__meta">
+              <div class="bus-card__meta-item">
+                <span class="icon">🕐</span>
+                ${bus.departure} — ${bus.arrival}
+              </div>
+              <div class="bus-card__meta-item">
+                <span class="icon">⏱️</span>
+                ${bus.duration}
+              </div>
+              <div class="bus-card__meta-item">
+                <span class="icon">⭐</span>
+                ${bus.rating}
+              </div>
+            </div>
+            <div class="bus-card__type">
+              <span class="badge badge--primary">${bus.type}</span>
+              <span class="badge ${availableSeats > 10 ? 'badge--success' : 'badge--warning'}">
+                ${availableSeats} seats available
+              </span>
+            </div>
+          </div>
+          <div class="bus-card__actions">
+            <div>
+              <div class="bus-card__price-label">Starting from</div>
+              <div class="bus-card__price">₹${bus.price}</div>
+            </div>
+            <button class="btn btn--primary btn--sm" onclick="selectBus(${bus.id})">
+              View Seats →
+            </button>
+          </div>
+        `;
+        busList.appendChild(card);
+      });
+    });
+
+    function selectBus(busId) {
+      const bus = BUSES.find(b => b.id === busId);
+      if (bus) {
+        AppState.selectedBus = bus;
+        AppState.selectedSeats = [];
+        AppState.save();
+        window.location.href = 'seats.html';
+      }
+    }
+  </script>
+</body>
+</html>
