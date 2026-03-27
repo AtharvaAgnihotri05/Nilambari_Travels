@@ -60,55 +60,81 @@
         routeInfo.textContent = 'Showing all available buses';
       }
 
-      // Render bus cards
-      const busList = document.getElementById('bus-list');
+      // Fetch bus routes from backend based on search query
+      fetch(`http://localhost:5000/api/search?source=${source || ''}&destination=${destination || ''}&date=${date || ''}`)
+        .then(res => res.json())
+        .then(data => {
+          const busList = document.getElementById('bus-list');
+          busList.innerHTML = '';
+          
+          if (!data.success || data.data.length === 0) {
+            busList.innerHTML = '<div style="text-align:center; padding:var(--space-2xl); color:var(--text-secondary);">No buses found for this route.</div>';
+            return;
+          }
 
-      BUSES.forEach(bus => {
-        const availableSeats = bus.totalSeats - bus.bookedSeats.length;
-        const card = document.createElement('div');
-        card.className = 'glass-card bus-card';
-        card.innerHTML = `
-          <div class="bus-card__info">
-            <div class="bus-card__name">${bus.name}</div>
-            <div class="bus-card__meta">
-              <div class="bus-card__meta-item">
-                <span class="icon">🕐</span>
-                ${bus.departure} — ${bus.arrival}
+          data.data.forEach((routeInfo) => {
+            const bus = routeInfo.bus;
+            const availableSeats = routeInfo.availableSeats;
+            
+            const card = document.createElement('div');
+            card.className = 'glass-card bus-card';
+            card.innerHTML = `
+              <div class="bus-card__info">
+                <div class="bus-card__name">${bus.name}</div>
+                <div class="bus-card__meta">
+                  <div class="bus-card__meta-item">
+                    <span class="icon">🕐</span>
+                    ${routeInfo.departure} — ${routeInfo.arrival}
+                  </div>
+                  <div class="bus-card__meta-item">
+                    <span class="icon">⏱️</span>
+                    ${routeInfo.duration}
+                  </div>
+                  <div class="bus-card__meta-item">
+                    <span class="icon">⭐</span>
+                    ${bus.rating}
+                  </div>
+                </div>
+                <div class="bus-card__type">
+                  <span class="badge badge--primary">${bus.type}</span>
+                  <span class="badge ${availableSeats > 10 ? 'badge--success' : 'badge--warning'}">
+                    ${availableSeats} seats available
+                  </span>
+                </div>
               </div>
-              <div class="bus-card__meta-item">
-                <span class="icon">⏱️</span>
-                ${bus.duration}
+              <div class="bus-card__actions">
+                <div>
+                  <div class="bus-card__price-label">Starting from</div>
+                  <div class="bus-card__price">₹${bus.price}</div>
+                </div>
+                <button class="btn btn--primary btn--sm" onclick='selectRoute(${JSON.stringify(routeInfo).replace(/'/g, "&apos;")})'>
+                  View Seats →
+                </button>
               </div>
-              <div class="bus-card__meta-item">
-                <span class="icon">⭐</span>
-                ${bus.rating}
-              </div>
-            </div>
-            <div class="bus-card__type">
-              <span class="badge badge--primary">${bus.type}</span>
-              <span class="badge ${availableSeats > 10 ? 'badge--success' : 'badge--warning'}">
-                ${availableSeats} seats available
-              </span>
-            </div>
-          </div>
-          <div class="bus-card__actions">
-            <div>
-              <div class="bus-card__price-label">Starting from</div>
-              <div class="bus-card__price">₹${bus.price}</div>
-            </div>
-            <button class="btn btn--primary btn--sm" onclick="selectBus(${bus.id})">
-              View Seats →
-            </button>
-          </div>
-        `;
-        busList.appendChild(card);
-      });
+            `;
+            busList.appendChild(card);
+          });
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById('bus-list').innerHTML = '<div style="text-align:center; padding:var(--space-2xl); color:var(--danger-400);">Error loading buses.</div>';
+        });
     });
 
-    function selectBus(busId) {
-      const bus = BUSES.find(b => b.id === busId);
-      if (bus) {
-        AppState.selectedBus = bus;
+    function selectRoute(routeObj) {
+      if (routeObj) {
+        // Map backend route info structure to AppState expected format
+        AppState.selectedBus = {
+          id: routeObj.bus._id,
+          routeId: routeObj.routeId,
+          name: routeObj.bus.name,
+          type: routeObj.bus.type,
+          departure: routeObj.departure,
+          arrival: routeObj.arrival,
+          price: routeObj.bus.price,
+          totalSeats: routeObj.bus.totalSeats,
+          bookedSeats: routeObj.bookedSeats || []
+        };
         AppState.selectedSeats = [];
         AppState.save();
         window.location.href = 'seats.html';
