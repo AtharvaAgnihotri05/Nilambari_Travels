@@ -69,6 +69,11 @@
           <div class="admin-action-card__title">Change Timing</div>
           <div class="admin-action-card__desc">Update departure and arrival times</div>
         </div>
+        <div class="glass-card admin-action-card" onclick="openModal('remove-bus')">
+          <div class="admin-action-card__icon" style="background:rgba(239,68,68,0.15); color:var(--danger-400);">🗑️</div>
+          <div class="admin-action-card__title">Remove Bus</div>
+          <div class="admin-action-card__desc">Remove a bus from the fleet</div>
+        </div>
       </div>
 
       <!-- Bus Fleet Table -->
@@ -251,6 +256,25 @@
             </div>
             <button type="submit" class="btn btn--primary btn--block">Update Timing</button>
           </form>
+        `
+      },
+      'remove-bus': {
+        title: '🗑️ Remove Bus',
+        body: `
+          <div style="margin-bottom:var(--space-lg); padding:var(--space-md); background:rgba(239,68,68,0.08); border-radius:var(--radius-md); border:1px solid rgba(239,68,68,0.2);">
+            <p style="font-size:0.85rem; color:var(--danger-400);">⚠️ This action will permanently remove the selected bus from the fleet.</p>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:var(--space-md);">
+            ${BUSES.map(b => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:var(--space-md) var(--space-lg); background:var(--bg-glass); border:1px solid var(--border-glass); border-radius:var(--radius-md);">
+                <div>
+                  <div style="font-weight:600;">${b.name}</div>
+                  <div style="font-size:0.8rem; color:var(--text-muted);">${b.type} • ₹${b.price}</div>
+                </div>
+                <button class="btn btn--danger btn--sm" onclick="event.preventDefault(); showToast('${b.name} removed! (UI only)','success'); closeModal();">Remove</button>
+              </div>
+            `).join('')}
+          </div>
         `
       }
     };
