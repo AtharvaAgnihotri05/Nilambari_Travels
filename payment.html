@@ -88,10 +88,11 @@
       }
 
       const { source, destination, date } = AppState.searchQuery;
-      const pricePerSeat = bus.bus.price;
-      const totalAmount = seats.length * pricePerSeat;
-      const tax = Math.round(totalAmount * 0.05);
-      const grandTotal = totalAmount + tax;
+      const booking = AppState.bookingDetails || {};
+      const pricePerSeat = booking.pricePerSeat || bus.bus.price;
+      const totalAmount = booking.totalAmount || (seats.length * pricePerSeat);
+      const tax = booking.tax || Math.round(totalAmount * 0.05);
+      const grandTotal = booking.grandTotal || (totalAmount + tax);
 
       // Render payment card
       const paymentCard = document.getElementById('payment-card');
@@ -187,8 +188,8 @@
           const successSection = document.getElementById('success-section');
           successSection.style.display = 'block';
 
-          // Booking ID
-          const bookingId = 'NLT' + Date.now().toString().slice(-8);
+          // Booking ID from backend or fallback
+          const bookingId = booking.bookingId || ('NLT' + Date.now().toString().slice(-8));
 
           document.getElementById('success-details').innerHTML = `
             <div style="font-size:0.9rem; line-height:2; color:var(--text-secondary);">

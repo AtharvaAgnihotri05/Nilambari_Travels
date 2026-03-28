@@ -153,10 +153,48 @@
           return;
         }
 
-        // Save and navigate
+        // Save passenger details
         AppState.passengerDetails = { name, phone };
-        AppState.save();
-        window.location.href = 'payment.html';
+        
+        // Setup backend payload
+        const payload = {
+          busId: bus.bus._id,
+          routeId: bus.routeId,
+          passengerName: name,
+          passengerPhone: phone,
+          seats: seats,
+          travelDate: AppState.searchQuery.date || new Date().toISOString().split('T')[0]
+        };
+
+        const btn = document.getElementById('payment-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = 'Processing...';
+        btn.disabled = true;
+
+        fetch('http://localhost:5000/api/bookings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            // Save the backend booking details for payment handling
+            AppState.bookingDetails = data.data;
+            AppState.save();
+            window.location.href = 'payment.html';
+          } else {
+            showToast(data.message || 'Booking failed. Seats might be unavailable.', 'error');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          showToast('Network error while booking', 'error');
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        });
       });
     });
   </script>
