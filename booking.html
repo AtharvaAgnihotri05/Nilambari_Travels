@@ -103,12 +103,12 @@
       const summary = document.getElementById('booking-summary');
       const { source, destination, date } = AppState.searchQuery;
       summary.innerHTML = `
-        <div>🚌 <strong>${bus.name}</strong> (${bus.type})</div>
+        <div>🚌 <strong>${bus.bus.name}</strong> (${bus.bus.type})</div>
         <div>📍 ${source || 'N/A'} → ${destination || 'N/A'}</div>
         <div>📅 ${formatDate(date)}</div>
         <div>🕐 ${bus.departure} — ${bus.arrival}</div>
         <div>💺 Seats: <strong>${seats.sort((a,b)=>a-b).join(', ')}</strong></div>
-        <div>💰 Total: <strong style="color:var(--primary-400);">₹${seats.length * bus.price}</strong></div>
+        <div>💰 Total: <strong style="color:var(--primary-400);">₹${seats.length * bus.bus.price}</strong></div>
       `;
 
       // Restore passenger details

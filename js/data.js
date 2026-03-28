@@ -87,7 +87,11 @@ const AppState = {
     name: '',
     phone: ''
   },
-  isAdminLoggedIn: false,
+
+  // Admin auth is now derived from JWT token
+  get isAdminLoggedIn() {
+    return !!localStorage.getItem('adminToken');
+  },
 
   // Save state to sessionStorage
   save() {
@@ -95,8 +99,7 @@ const AppState = {
       searchQuery: this.searchQuery,
       selectedBus: this.selectedBus,
       selectedSeats: this.selectedSeats,
-      passengerDetails: this.passengerDetails,
-      isAdminLoggedIn: this.isAdminLoggedIn
+      passengerDetails: this.passengerDetails
     }));
   },
 
@@ -106,7 +109,10 @@ const AppState = {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        Object.assign(this, parsed);
+        if (parsed.searchQuery) this.searchQuery = parsed.searchQuery;
+        if (parsed.selectedBus) this.selectedBus = parsed.selectedBus;
+        if (parsed.selectedSeats) this.selectedSeats = parsed.selectedSeats;
+        if (parsed.passengerDetails) this.passengerDetails = parsed.passengerDetails;
       } catch (e) {
         console.warn('Failed to load state:', e);
       }
@@ -119,8 +125,14 @@ const AppState = {
     this.selectedSeats = [];
     this.passengerDetails = { name: '', phone: '' };
     this.save();
+  },
+
+  // Logout admin
+  adminLogout() {
+    localStorage.removeItem('adminToken');
   }
 };
 
 // Load state on script load
 AppState.load();
+

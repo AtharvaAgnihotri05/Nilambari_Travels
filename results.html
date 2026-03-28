@@ -36,10 +36,11 @@
   <footer class="footer" id="footer"></footer>
 
   <!-- Scripts -->
+  <script src="js/api.js"></script>
   <script src="js/data.js"></script>
   <script src="js/components.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       initPageCommon('results');
 
       // Breadcrumb
@@ -55,65 +56,80 @@
       const { source, destination, date } = AppState.searchQuery;
       const routeInfo = document.getElementById('route-info');
       if (source && destination) {
-        routeInfo.textContent = `${source} → ${destination} • ${formatDate(date)}`;
+        routeInfo.textContent = `${source} \u2192 ${destination} \u2022 ${formatDate(date)}`;
       } else {
         routeInfo.textContent = 'Showing all available buses';
       }
 
-      // Render bus cards
       const busList = document.getElementById('bus-list');
 
-      BUSES.forEach(bus => {
-        const availableSeats = bus.totalSeats - bus.bookedSeats.length;
-        const card = document.createElement('div');
-        card.className = 'glass-card bus-card';
-        card.innerHTML = `
-          <div class="bus-card__info">
-            <div class="bus-card__name">${bus.name}</div>
-            <div class="bus-card__meta">
-              <div class="bus-card__meta-item">
-                <span class="icon">🕐</span>
-                ${bus.departure} — ${bus.arrival}
-              </div>
-              <div class="bus-card__meta-item">
-                <span class="icon">⏱️</span>
-                ${bus.duration}
-              </div>
-              <div class="bus-card__meta-item">
-                <span class="icon">⭐</span>
-                ${bus.rating}
-              </div>
-            </div>
-            <div class="bus-card__type">
-              <span class="badge badge--primary">${bus.type}</span>
-              <span class="badge ${availableSeats > 10 ? 'badge--success' : 'badge--warning'}">
-                ${availableSeats} seats available
-              </span>
-            </div>
-          </div>
-          <div class="bus-card__actions">
-            <div>
-              <div class="bus-card__price-label">Starting from</div>
-              <div class="bus-card__price">₹${bus.price}</div>
-            </div>
-            <button class="btn btn--primary btn--sm" onclick="selectBus(${bus.id})">
-              View Seats →
-            </button>
-          </div>
-        `;
-        busList.appendChild(card);
-      });
-    });
+      // Fetch live data from APIs
+      if (source && destination) {
+        busList.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:var(--space-2xl);">Searching for buses...</p>';
 
-    function selectBus(busId) {
-      const bus = BUSES.find(b => b.id === busId);
-      if (bus) {
-        AppState.selectedBus = bus;
-        AppState.selectedSeats = [];
-        AppState.save();
-        window.location.href = 'seats.html';
+        try {
+          const result = await ApiClient.search(source, destination, date);
+
+          if (result.success && result.data.length > 0) {
+            busList.innerHTML = '';
+            result.data.forEach(item => {
+              const card = document.createElement('div');
+              card.className = 'glass-card bus-card';
+              card.innerHTML = `
+                <div class="bus-card__info">
+                  <div class="bus-card__name">${item.bus.name}</div>
+                  <div class="bus-card__meta">
+                    <div class="bus-card__meta-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      ${item.departure} \u2014 ${item.arrival}
+                    </div>
+                    <div class="bus-card__meta-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      ${item.duration}
+                    </div>
+                    <div class="bus-card__meta-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                      ${item.bus.rating}
+                    </div>
+                  </div>
+                  <div class="bus-card__type">
+                    <span class="badge badge--primary">${item.bus.type}</span>
+                    <span class="badge ${item.availableSeats > 10 ? 'badge--success' : 'badge--warning'}">
+                      ${item.availableSeats} seats available
+                    </span>
+                  </div>
+                </div>
+                <div class="bus-card__actions">
+                  <div>
+                    <div class="bus-card__price-label">Starting from</div>
+                    <div class="bus-card__price">\u20B9${item.bus.price}</div>
+                  </div>
+                  <button class="btn btn--primary btn--sm" data-bus='${JSON.stringify(item).replace(/'/g, "&#39;")}'>
+                    View Seats \u2192
+                  </button>
+                </div>
+              `;
+              // Attach click handler
+              card.querySelector('.btn--primary').addEventListener('click', function() {
+                const busData = JSON.parse(this.getAttribute('data-bus'));
+                AppState.selectedBus = busData;
+                AppState.selectedSeats = [];
+                AppState.save();
+                window.location.href = 'seats.html';
+              });
+              busList.appendChild(card);
+            });
+          } else {
+            busList.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:var(--space-2xl);">No buses found for this route. Try a different source or destination.</p>';
+          }
+        } catch (err) {
+          busList.innerHTML = '<p style="text-align:center; color:var(--danger-400); padding:var(--space-2xl);">Failed to load buses. Please check your connection and try again.</p>';
+          console.error('Search error:', err);
+        }
+      } else {
+        busList.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding:var(--space-2xl);">Please go back and search for a route.</p>';
       }
-    }
+    });
   </script>
 </body>
 </html>

@@ -88,7 +88,7 @@
       }
 
       const { source, destination, date } = AppState.searchQuery;
-      const pricePerSeat = bus.price;
+      const pricePerSeat = bus.bus.price;
       const totalAmount = seats.length * pricePerSeat;
       const tax = Math.round(totalAmount * 0.05);
       const grandTotal = totalAmount + tax;
@@ -111,11 +111,11 @@
           </div>
           <div class="payment-summary__row">
             <span class="payment-summary__label">Bus</span>
-            <span class="payment-summary__value">${bus.name}</span>
+            <span class="payment-summary__value">${bus.bus.name}</span>
           </div>
           <div class="payment-summary__row">
             <span class="payment-summary__label">Type</span>
-            <span class="payment-summary__value">${bus.type}</span>
+            <span class="payment-summary__value">${bus.bus.type}</span>
           </div>
           <div class="payment-summary__row">
             <span class="payment-summary__label">Route</span>
@@ -194,7 +194,7 @@
             <div style="font-size:0.9rem; line-height:2; color:var(--text-secondary);">
               <div><strong>Booking ID:</strong> <span style="color:var(--primary-400); font-weight:700;">${bookingId}</span></div>
               <div><strong>Passenger:</strong> ${passenger.name}</div>
-              <div><strong>Bus:</strong> ${bus.name} (${bus.type})</div>
+              <div><strong>Bus:</strong> ${bus.bus.name} (${bus.bus.type})</div>
               <div><strong>Route:</strong> ${source} → ${destination}</div>
               <div><strong>Date:</strong> ${formatDate(date)}</div>
               <div><strong>Seats:</strong> ${seats.join(', ')}</div>

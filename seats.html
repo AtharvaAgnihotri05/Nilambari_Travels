@@ -103,9 +103,9 @@
       }
 
       // Header
-      document.getElementById('bus-name').textContent = bus.name;
+      document.getElementById('bus-name').textContent = bus.bus.name;
       document.getElementById('bus-info').textContent =
-        `${bus.type} • ${bus.departure} — ${bus.arrival} • ₹${bus.price}/seat`;
+        `${bus.bus.type} • ${bus.departure} — ${bus.arrival} • ₹${bus.bus.price}/seat`;
 
       // Restore selected seats
       selectedSeats = AppState.selectedSeats || [];
@@ -113,7 +113,7 @@
       // Render seat grid (5 columns: 2 seats | aisle | 2 seats, 6 rows = 30 seats max)
       const seatGrid = document.getElementById('seat-grid');
       let seatNum = 1;
-      const totalSeats = bus.totalSeats;
+      const totalSeats = bus.bus.totalSeats;
       const rows = Math.ceil(totalSeats / 4); // 4 usable seats per row (5 cols, 1 aisle)
 
       for (let row = 0; row < rows; row++) {

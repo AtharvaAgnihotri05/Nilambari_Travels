@@ -101,6 +101,7 @@
   <footer class="footer" id="footer"></footer>
 
   <!-- Scripts -->
+  <script src="js/api.js"></script>
   <script src="js/data.js"></script>
   <script src="js/components.js"></script>
   <script>
@@ -126,7 +127,7 @@
       if (AppState.searchQuery.destination) destSelect.value = AppState.searchQuery.destination;
 
       // Search button handler
-      document.getElementById('search-btn').addEventListener('click', () => {
+      document.getElementById('search-btn').addEventListener('click', async function() {
         let valid = true;
 
         // Validate source
@@ -156,10 +157,29 @@
           return;
         }
 
-        // Save and navigate
-        AppState.searchQuery = { source, destination: dest, date };
-        AppState.save();
-        window.location.href = 'results.html';
+        // Change button state
+        const originalText = this.innerHTML;
+        this.disabled = true;
+        this.innerHTML = 'Searching...';
+
+        try {
+          // Pre-validate route
+          const result = await ApiClient.search(source, dest, date);
+          if (result.success && result.data.length > 0) {
+            // Save and navigate
+            AppState.searchQuery = { source, destination: dest, date };
+            AppState.save();
+            window.location.href = 'results.html';
+          } else {
+            showToast('No buses found for this route on the selected date.', 'warning');
+            this.disabled = false;
+            this.innerHTML = originalText;
+          }
+        } catch(e) {
+            showToast('Connection error. Is the server running?', 'error');
+            this.disabled = false;
+            this.innerHTML = originalText;
+        }
       });
     });
   </script>
