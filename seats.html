@@ -53,6 +53,10 @@
             <div class="seat-legend__color seat-legend__color--booked"></div>
             Booked
           </div>
+          <div class="seat-legend__item">
+            <div class="seat-legend__color seat-legend__color--locked"></div>
+            Locked
+          </div>
         </div>
 
         <!-- Selected Seats Summary -->
@@ -78,8 +82,13 @@
   <!-- Scripts -->
   <script src="js/data.js"></script>
   <script src="js/components.js"></script>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script>
     let selectedSeats = [];
+    let externallyLockedSeats = [];
+    let socket;
+    let busId;
+    let travelDate;
 
     document.addEventListener('DOMContentLoaded', () => {
       initPageCommon('');
@@ -96,30 +105,118 @@
 
       // Check if bus is selected
       const bus = AppState.selectedBus;
-      if (!bus) {
-        showToast('No bus selected. Please search first.', 'error');
+      if (!bus || !AppState.searchParams || !AppState.searchParams.date) {
+        showToast('No bus/date selected. Please search first.', 'error');
         setTimeout(() => window.location.href = 'index.html', 1500);
         return;
       }
+
+      busId = bus._id;
+      travelDate = AppState.searchParams.date;
 
       // Header
       document.getElementById('bus-name').textContent = bus.bus.name;
       document.getElementById('bus-info').textContent =
         `${bus.bus.type} • ${bus.departure} — ${bus.arrival} • ₹${bus.bus.price}/seat`;
 
-      // Restore selected seats
-      selectedSeats = AppState.selectedSeats || [];
+      const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? 'http://localhost:5000/seats' 
+        : '/seats';
+      socket = io(backendUrl);
 
-      // Render seat grid (5 columns: 2 seats | aisle | 2 seats, 6 rows = 30 seats max)
+      socket.on('connect', () => {
+        socket.emit('join-bus', { busId, date: travelDate });
+      });
+
+      socket.on('seats-status', ({ lockedSeats }) => {
+        externallyLockedSeats = lockedSeats.map(l => l.seat);
+        renderSeatGrid(bus);
+      });
+
+      socket.on('seat-locked', ({ seat }) => {
+        if (!externallyLockedSeats.includes(seat)) {
+          externallyLockedSeats.push(seat);
+          updateSeatUI(seat, 'locked');
+        }
+      });
+
+      socket.on('seat-released', ({ seat }) => {
+        externallyLockedSeats = externallyLockedSeats.filter(s => s !== seat);
+        updateSeatUI(seat, 'available');
+      });
+
+      socket.on('seat-booked', ({ seats }) => {
+        seats.forEach(seat => {
+          if (!bus.bookedSeats.includes(seat)) {
+            bus.bookedSeats.push(seat);
+          }
+          externallyLockedSeats = externallyLockedSeats.filter(s => s !== seat);
+          updateSeatUI(seat, 'booked');
+        });
+        AppState.save();
+      });
+
+      socket.on('seat-lock-success', ({ seat }) => {
+        if (selectedSeats.length >= 6) {
+          showToast('You can select a maximum of 6 seats', 'error');
+          socket.emit('deselect-seat', { busId, date: travelDate, seat });
+          updateSeatUI(seat, 'available');
+          return;
+        }
+        selectedSeats.push(seat);
+        updateSeatUI(seat, 'selected');
+        updateSeatsSummary();
+      });
+
+      socket.on('seat-lock-failed', ({ seat, message }) => {
+        showToast(message || 'Failed to lock seat', 'error');
+        if (!externallyLockedSeats.includes(seat)) {
+           externallyLockedSeats.push(seat);
+        }
+        updateSeatUI(seat, 'locked');
+      });
+
+      const prevSelected = AppState.selectedSeats || [];
+      selectedSeats = [];
+      
+      renderSeatGrid(bus, true);
+
+      if (prevSelected.length > 0) {
+         const interval = setInterval(() => {
+            if (socket.connected) {
+               prevSelected.forEach(seatNum => {
+                 toggleSeat(seatNum);
+               });
+               clearInterval(interval);
+            }
+         }, 100);
+      }
+
+      document.getElementById('proceed-btn').addEventListener('click', () => {
+        if (selectedSeats.length === 0) {
+          showToast('Please select at least one seat', 'error');
+          return;
+        }
+        AppState.selectedSeats = selectedSeats;
+        AppState.save();
+        window.location.href = 'booking.html';
+      });
+
+      window.addEventListener('beforeunload', () => {
+        socket.emit('leave-bus', { busId, date: travelDate });
+      });
+    });
+
+    function renderSeatGrid(bus, isInitial = false) {
       const seatGrid = document.getElementById('seat-grid');
+      seatGrid.innerHTML = '';
+      
       let seatNum = 1;
       const totalSeats = bus.bus.totalSeats;
       const rows = Math.ceil(totalSeats / 4); // 4 usable seats per row (5 cols, 1 aisle)
-
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < 5; col++) {
           if (col === 2) {
-            // Aisle
             const aisle = document.createElement('div');
             aisle.className = 'aisle';
             seatGrid.appendChild(aisle);
@@ -137,17 +234,28 @@
           seatEl.className = 'seat';
           seatEl.textContent = seatNum;
           seatEl.dataset.seat = seatNum;
+          seatEl.id = `seat-${seatNum}`;
 
           if (bus.bookedSeats.includes(seatNum)) {
             seatEl.classList.add('seat--booked');
             seatEl.title = `Seat ${seatNum} - Booked`;
+            seatEl.disabled = true;
+          } else if (externallyLockedSeats.includes(seatNum)) {
+            seatEl.classList.add('seat--locked');
+            seatEl.title = `Seat ${seatNum} - Locked`;
             seatEl.disabled = true;
           } else {
             if (selectedSeats.includes(seatNum)) {
               seatEl.classList.add('seat--selected');
             }
             seatEl.title = `Seat ${seatNum} - Available`;
-            seatEl.addEventListener('click', () => toggleSeat(seatNum, seatEl));
+            const currentSeat = seatNum;
+            seatEl.addEventListener('click', () => toggleSeat(currentSeat));
+          }
+
+          if (isInitial) {
+             seatEl.disabled = true; 
+             seatEl.style.opacity = '0.5';
           }
 
           seatGrid.appendChild(seatEl);
@@ -155,34 +263,53 @@
         }
       }
 
-      updateSeatsSummary();
+      if (!isInitial) updateSeatsSummary();
+    }
 
-      // Proceed button
-      document.getElementById('proceed-btn').addEventListener('click', () => {
-        if (selectedSeats.length === 0) {
-          showToast('Please select at least one seat', 'error');
-          return;
-        }
-        AppState.selectedSeats = selectedSeats;
-        AppState.save();
-        window.location.href = 'booking.html';
-      });
-    });
-
-    function toggleSeat(seatNum, seatEl) {
+    function toggleSeat(seatNum) {
       const index = selectedSeats.indexOf(seatNum);
+      const seatEl = document.getElementById(`seat-${seatNum}`);
+      
       if (index > -1) {
         selectedSeats.splice(index, 1);
-        seatEl.classList.remove('seat--selected');
+        updateSeatUI(seatNum, 'available');
+        updateSeatsSummary();
+        socket.emit('deselect-seat', { busId, date: travelDate, seat: seatNum });
       } else {
         if (selectedSeats.length >= 6) {
           showToast('You can select a maximum of 6 seats', 'error');
           return;
         }
-        selectedSeats.push(seatNum);
-        seatEl.classList.add('seat--selected');
+        if (seatEl) {
+           seatEl.classList.add('seat--loading');
+           seatEl.disabled = true;
+        }
+        socket.emit('select-seat', { busId, date: travelDate, seat: seatNum });
       }
-      updateSeatsSummary();
+    }
+
+    function updateSeatUI(seatNum, state) {
+      const seatEl = document.getElementById(`seat-${seatNum}`);
+      if (!seatEl) return;
+      
+      seatEl.classList.remove('seat--selected', 'seat--booked', 'seat--locked', 'seat--loading');
+      seatEl.disabled = false;
+      seatEl.style.opacity = '1';
+      
+      if (state === 'selected') {
+        seatEl.classList.add('seat--selected');
+        seatEl.title = `Seat ${seatNum} - Selected`;
+      } else if (state === 'booked') {
+        seatEl.classList.add('seat--booked');
+        seatEl.title = `Seat ${seatNum} - Booked`;
+        seatEl.disabled = true;
+      } else if (state === 'locked') {
+        seatEl.classList.add('seat--locked');
+        seatEl.title = `Seat ${seatNum} - Locked`;
+        seatEl.disabled = true;
+      } else if (state === 'available') {
+        seatEl.title = `Seat ${seatNum} - Available`;
+      }
     }
 
     function updateSeatsSummary() {

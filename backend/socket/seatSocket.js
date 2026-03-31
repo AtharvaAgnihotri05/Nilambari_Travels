@@ -2,53 +2,15 @@
  * Socket.io Seat Concurrency Handler
  * 
  * Manages real-time seat locking/unlocking to prevent double bookings.
- * Uses in-memory Map with TTL for seat locks.
+ * Uses MongoDB SeatLock model for atomic distributed locking.
  * 
  * Room format: "bus_<busId>_<date>"
- * Lock format: "bus_<busId>_<date>_seat_<seatNum>"
  */
 
-// In-memory seat lock store: Map<lockKey, { userId, timestamp }>
-const seatLocks = new Map();
-
-// Lock timeout: 5 minutes
-const LOCK_TIMEOUT = 5 * 60 * 1000;
-
-// Cleanup expired locks every 60 seconds
-setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
-  for (const [key, lock] of seatLocks.entries()) {
-    if (now - lock.timestamp > LOCK_TIMEOUT) {
-      seatLocks.delete(key);
-      cleaned++;
-    }
-  }
-  if (cleaned > 0) {
-    console.log(`🧹 Cleaned ${cleaned} expired seat locks`);
-  }
-}, 60 * 1000);
+const SeatLock = require('../models/SeatLock');
 
 function getRoomName(busId, date) {
   return `bus_${busId}_${date}`;
-}
-
-function getLockKey(busId, date, seat) {
-  return `bus_${busId}_${date}_seat_${seat}`;
-}
-
-function getLockedSeats(busId, date) {
-  const prefix = `bus_${busId}_${date}_seat_`;
-  const locked = [];
-  const now = Date.now();
-
-  for (const [key, lock] of seatLocks.entries()) {
-    if (key.startsWith(prefix) && now - lock.timestamp <= LOCK_TIMEOUT) {
-      const seatNum = parseInt(key.replace(prefix, ''));
-      locked.push({ seat: seatNum, userId: lock.userId });
-    }
-  }
-  return locked;
 }
 
 function initSeatSocket(io) {
@@ -58,7 +20,7 @@ function initSeatSocket(io) {
     console.log(`🔌 Seat socket connected: ${socket.id}`);
 
     // Join a bus room for real-time updates
-    socket.on('join-bus', ({ busId, date }) => {
+    socket.on('join-bus', async ({ busId, date }) => {
       if (!busId || !date) return;
 
       const room = getRoomName(busId, date);
@@ -68,141 +30,161 @@ function initSeatSocket(io) {
 
       console.log(`👤 ${socket.id} joined room: ${room}`);
 
-      // Send current locked seats to the new user
-      const lockedSeats = getLockedSeats(busId, date);
-      socket.emit('seats-status', {
-        lockedSeats: lockedSeats.filter((l) => l.userId !== socket.id),
-      });
+      // Send current valid locked seats to the new user
+      // TTL index cleans up periodically, but we forcefully exclude expired ones
+      try {
+        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const lockedSeatsDb = await SeatLock.find({
+          busId,
+          travelDate: date,
+          createdAt: { $gte: fiveMinsAgo }
+        }).select('seatNumber socketId -_id');
+
+        const lockedSeats = lockedSeatsDb.map((l) => ({ seat: l.seatNumber, userId: l.socketId }));
+        
+        socket.emit('seats-status', {
+          lockedSeats: lockedSeats.filter((l) => l.userId !== socket.id),
+        });
+      } catch (error) {
+        console.error('Error fetching initial seat locks:', error.message);
+      }
     });
 
     // User selects (locks) a seat
-    socket.on('select-seat', ({ busId, date, seat }) => {
+    socket.on('select-seat', async ({ busId, date, seat }) => {
       if (!busId || !date || !seat) return;
 
-      const lockKey = getLockKey(busId, date, seat);
-      const existingLock = seatLocks.get(lockKey);
+      try {
+        // Attempt an atomic lock insert
+        await SeatLock.create({
+          busId,
+          travelDate: date,
+          seatNumber: seat,
+          socketId: socket.id,
+        });
 
-      // Check if seat is already locked by someone else
-      if (existingLock && existingLock.userId !== socket.id) {
-        const now = Date.now();
-        if (now - existingLock.timestamp <= LOCK_TIMEOUT) {
-          // Seat is locked by another user
+        // Broadcast lock success to the room
+        const room = getRoomName(busId, date);
+        socket.to(room).emit('seat-locked', {
+          seat,
+          userId: socket.id,
+        });
+
+        socket.emit('seat-lock-success', { seat });
+        console.log(`🔒 Seat ${seat} remotely locked by ${socket.id} in ${room}`);
+      } catch (error) {
+        // 11000 is Duplicate Key Error (Atomic constraint violated)
+        if (error.code === 11000) {
           socket.emit('seat-lock-failed', {
             seat,
-            message: 'This seat is being held by another user',
+            message: 'This seat is currently being held by another user',
           });
-          return;
+        } else {
+          console.error('Error selecting seat:', error.message);
+          socket.emit('seat-lock-failed', { seat, message: 'System error locking seat' });
         }
       }
-
-      // Lock the seat
-      seatLocks.set(lockKey, {
-        userId: socket.id,
-        timestamp: Date.now(),
-      });
-
-      // Broadcast to other users in the room
-      const room = getRoomName(busId, date);
-      socket.to(room).emit('seat-locked', {
-        seat,
-        userId: socket.id,
-      });
-
-      socket.emit('seat-lock-success', { seat });
-      console.log(`🔒 Seat ${seat} locked by ${socket.id} in ${room}`);
     });
 
     // User deselects (unlocks) a seat
-    socket.on('deselect-seat', ({ busId, date, seat }) => {
+    socket.on('deselect-seat', async ({ busId, date, seat }) => {
       if (!busId || !date || !seat) return;
 
-      const lockKey = getLockKey(busId, date, seat);
-      const existingLock = seatLocks.get(lockKey);
+      try {
+        // Find and delete the lock ONLY if the current socket owns it
+        const result = await SeatLock.deleteOne({
+          busId,
+          travelDate: date,
+          seatNumber: seat,
+          socketId: socket.id,
+        });
 
-      // Only the user who locked it can unlock it
-      if (existingLock && existingLock.userId === socket.id) {
-        seatLocks.delete(lockKey);
-
-        const room = getRoomName(busId, date);
-        socket.to(room).emit('seat-released', { seat });
-        console.log(`🔓 Seat ${seat} released by ${socket.id} in ${room}`);
+        if (result.deletedCount > 0) {
+          const room = getRoomName(busId, date);
+          socket.to(room).emit('seat-released', { seat });
+          console.log(`🔓 Seat ${seat} released by ${socket.id} in ${room}`);
+        }
+      } catch (error) {
+        console.error('Error deselecting seat:', error.message);
       }
     });
 
     // Seats booked (payment confirmed)
-    socket.on('seats-booked', ({ busId, date, seats }) => {
-      if (!busId || !date || !seats) return;
+    socket.on('seats-booked', async ({ busId, date, seats }) => {
+      if (!busId || !date || !seats || !Array.isArray(seats)) return;
 
-      // Remove locks for booked seats
-      seats.forEach((seat) => {
-        const lockKey = getLockKey(busId, date, seat);
-        seatLocks.delete(lockKey);
-      });
+      try {
+        // Remove locks for the permanently booked seats
+        await SeatLock.deleteMany({
+          busId,
+          travelDate: date,
+          seatNumber: { $in: seats },
+        });
 
-      // Broadcast to all users in room that these seats are now permanently booked
-      const room = getRoomName(busId, date);
-      io.of('/seats').to(room).emit('seat-booked', { seats });
-      console.log(`✅ Seats ${seats.join(', ')} booked in ${room}`);
+        // Broadcast to all users in room that these seats are now permanently booked
+        const room = getRoomName(busId, date);
+        io.of('/seats').to(room).emit('seat-booked', { seats });
+        console.log(`✅ Seats ${seats.join(', ')} booked in ${room}`);
+      } catch (error) {
+        console.error('Error confirming seats booked:', error.message);
+      }
     });
 
     // User leaves the bus room
-    socket.on('leave-bus', ({ busId, date }) => {
+    socket.on('leave-bus', async ({ busId, date }) => {
       if (!busId || !date) return;
 
       const room = getRoomName(busId, date);
       socket.leave(room);
 
-      // Release all locks held by this user for this bus/date
-      releaseUserLocks(socket, busId, date);
+      // Release all locks held by this user for this specific room
+      await releaseUserLocks(seatNamespace, socket, busId, date);
       console.log(`👋 ${socket.id} left room: ${room}`);
     });
 
     // Disconnect - release all locks
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`🔌 Seat socket disconnected: ${socket.id}`);
 
-      // Release all locks held by this user
-      const keysToDelete = [];
-      for (const [key, lock] of seatLocks.entries()) {
-        if (lock.userId === socket.id) {
-          keysToDelete.push(key);
+      // General release of all locks globally held by user
+      try {
+        const locks = await SeatLock.find({ socketId: socket.id });
+        if (locks.length > 0) {
+          await SeatLock.deleteMany({ socketId: socket.id });
+
+          // Broadcast release to contextual rooms
+          locks.forEach((lock) => {
+            const room = getRoomName(lock.busId, lock.travelDate);
+            seatNamespace.to(room).emit('seat-released', { seat: lock.seatNumber });
+          });
+          
+          console.log(`🧹 Released ${locks.length} Mongo locks for disconnected user ${socket.id}`);
         }
-      }
-
-      keysToDelete.forEach((key) => {
-        seatLocks.delete(key);
-
-        // Extract busId, date, seat from key to broadcast
-        const parts = key.split('_');
-        // Format: bus_<busId>_<date>_seat_<seatNum>
-        // busId could contain underscores in theory, but our IDs are MongoDB ObjectIds
-        const seat = parseInt(parts[parts.length - 1]);
-        const busId = parts[1];
-        const date = parts[2];
-        const room = getRoomName(busId, date);
-
-        seatNamespace.to(room).emit('seat-released', { seat });
-      });
-
-      if (keysToDelete.length > 0) {
-        console.log(`🧹 Released ${keysToDelete.length} locks for disconnected user ${socket.id}`);
+      } catch (error) {
+        console.error('Error on disconnect cleanup:', error.message);
       }
     });
   });
 
-  console.log('🔌 Socket.io seat handler initialized');
+  console.log('🔌 Socket.io seat handler initialized (MongoDB Atomic Locks)');
 }
 
-function releaseUserLocks(socket, busId, date) {
-  const prefix = `bus_${busId}_${date}_seat_`;
-  const room = getRoomName(busId, date);
+async function releaseUserLocks(seatNamespace, socket, busId, date) {
+  try {
+    const room = getRoomName(busId, date);
+    
+    // Find before deleting so we can extract exact seats
+    const locks = await SeatLock.find({ busId, travelDate: date, socketId: socket.id });
+    
+    if (locks.length > 0) {
+      await SeatLock.deleteMany({ _id: { $in: locks.map(l => l._id) } });
 
-  for (const [key, lock] of seatLocks.entries()) {
-    if (key.startsWith(prefix) && lock.userId === socket.id) {
-      const seat = parseInt(key.replace(prefix, ''));
-      seatLocks.delete(key);
-      socket.to(room).emit('seat-released', { seat });
+      locks.forEach((lock) => {
+        socket.to(room).emit('seat-released', { seat: lock.seatNumber });
+      });
     }
+  } catch (error) {
+    console.error('Error manually releasing user locks:', error.message);
   }
 }
 

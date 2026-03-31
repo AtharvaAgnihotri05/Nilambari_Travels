@@ -24,6 +24,11 @@ const busSchema = new mongoose.Schema(
       required: [true, 'Price is required'],
       min: 0,
     },
+    seatPrices: {
+      type: Map,
+      of: Number,
+      default: {},
+    },
     amenities: {
       type: [String],
       default: [],
