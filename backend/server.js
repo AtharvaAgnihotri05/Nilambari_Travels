@@ -113,19 +113,19 @@ const startServer = async () => {
     // Start server
     server.listen(PORT, () => {
       console.log('');
-      console.log('  ╔════════════════════════════════════════════╗');
-      console.log('  ║                                            ║');
-      console.log('  ║   🚌 Nilambari Travels Backend Server     ║');
-      console.log('  ║                                            ║');
-      console.log(`  ║   🌐 API:    http://localhost:${PORT}/api     ║`);
-      console.log(`  ║   🏠 App:    http://localhost:${PORT}         ║`);
-      console.log('  ║   🔌 Socket: /seats namespace              ║');
-      console.log('  ║                                            ║');
-      console.log('  ╚════════════════════════════════════════════╝');
+      console.log('  ======================================================');
+      console.log('  |                                                    |');
+      console.log('  |   [ Nilambari Travels Backend Server ]             |');
+      console.log('  |                                                    |');
+      console.log(`  |   API:    http://localhost:${PORT}/api             |`);
+      console.log(`  |   App:    http://localhost:${PORT}                 |`);
+      console.log('  |   Socket: /seats namespace                         |');
+      console.log('  |                                                    |');
+      console.log('  ======================================================');
       console.log('');
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
+    console.error('Failed to start server:', error.message);
     process.exit(1);
   }
 };
