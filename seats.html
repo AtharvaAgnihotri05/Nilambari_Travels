@@ -29,15 +29,7 @@
 
       <!-- Seat Grid -->
       <div class="glass-card seat-grid-wrapper">
-        <div style="text-align:center; margin-bottom:var(--space-md); font-size:0.85rem; color:var(--text-muted);">
-          🚌 Front
-        </div>
-
-        <div class="seat-grid" id="seat-grid"></div>
-
-        <div style="text-align:center; margin-top:var(--space-md); font-size:0.85rem; color:var(--text-muted);">
-          Back
-        </div>
+        <div class="decks-container" id="decks-container"></div>
 
         <!-- Legend -->
         <div class="seat-legend">
@@ -105,14 +97,14 @@
 
       // Check if bus is selected
       const bus = AppState.selectedBus;
-      if (!bus || !AppState.searchParams || !AppState.searchParams.date) {
+      if (!bus || !AppState.searchQuery || !AppState.searchQuery.date) {
         showToast('No bus/date selected. Please search first.', 'error');
         setTimeout(() => window.location.href = 'index.html', 1500);
         return;
       }
 
-      busId = bus._id;
-      travelDate = AppState.searchParams.date;
+      busId = bus.bus._id;
+      travelDate = AppState.searchQuery.date;
 
       // Header
       document.getElementById('bus-name').textContent = bus.bus.name;
@@ -208,60 +200,117 @@
     });
 
     function renderSeatGrid(bus, isInitial = false) {
-      const seatGrid = document.getElementById('seat-grid');
-      seatGrid.innerHTML = '';
+      const decksContainer = document.getElementById('decks-container');
+      if (!decksContainer) return;
+      decksContainer.innerHTML = '';
       
-      let seatNum = 1;
-      const totalSeats = bus.bus.totalSeats;
-      const rows = Math.ceil(totalSeats / 4); // 4 usable seats per row (5 cols, 1 aisle)
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < 5; col++) {
-          if (col === 2) {
-            const aisle = document.createElement('div');
-            aisle.className = 'aisle';
-            seatGrid.appendChild(aisle);
-            continue;
-          }
+      const totalSeats = bus.bus.totalSeats || 30; // Fallback to 30 for sleeper
+      const seatsPerDeck = Math.ceil(totalSeats / 2);
+      
+      const decks = [
+        { name: 'Lower deck', hasSteering: true, startId: 1, endId: seatsPerDeck },
+        { name: 'Upper deck', hasSteering: false, startId: seatsPerDeck + 1, endId: totalSeats }
+      ];
 
-          if (seatNum > totalSeats) {
-            const empty = document.createElement('div');
-            seatGrid.appendChild(empty);
-            seatNum++;
-            continue;
-          }
+      // Safe check for DB seatPrices map
+      const dbPrices = bus.bus.seatPrices || {};
 
-          const seatEl = document.createElement('button');
-          seatEl.className = 'seat';
-          seatEl.textContent = seatNum;
-          seatEl.dataset.seat = seatNum;
-          seatEl.id = `seat-${seatNum}`;
-
-          if (bus.bookedSeats.includes(seatNum)) {
-            seatEl.classList.add('seat--booked');
-            seatEl.title = `Seat ${seatNum} - Booked`;
-            seatEl.disabled = true;
-          } else if (externallyLockedSeats.includes(seatNum)) {
-            seatEl.classList.add('seat--locked');
-            seatEl.title = `Seat ${seatNum} - Locked`;
-            seatEl.disabled = true;
-          } else {
-            if (selectedSeats.includes(seatNum)) {
-              seatEl.classList.add('seat--selected');
-            }
-            seatEl.title = `Seat ${seatNum} - Available`;
-            const currentSeat = seatNum;
-            seatEl.addEventListener('click', () => toggleSeat(currentSeat));
-          }
-
-          if (isInitial) {
-             seatEl.disabled = true; 
-             seatEl.style.opacity = '0.5';
-          }
-
-          seatGrid.appendChild(seatEl);
-          seatNum++;
+      decks.forEach(deck => {
+        const deckEl = document.createElement('div');
+        deckEl.className = 'deck';
+        
+        let headerHtml = `<div class="deck-title">${deck.name}</div>`;
+        if (deck.hasSteering) {
+          headerHtml += `<svg style="color:var(--text-muted); width:24px; height:24px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v7M2 12h7M22 12h-7"/></svg>`;
         }
-      }
+        
+        const headerEl = document.createElement('div');
+        headerEl.className = 'deck-header';
+        headerEl.innerHTML = headerHtml;
+        deckEl.appendChild(headerEl);
+
+        const deckGridEl = document.createElement('div');
+        deckGridEl.className = 'deck-grid';
+        
+        // 3 seats per row per deck -> 4 positions including aisle (0: seat, 1: aisle, 2: seat, 3: seat)
+        let currentSeatNum = deck.startId;
+        const rows = Math.ceil((deck.endId - deck.startId + 1) / 3);
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (c === 1) {
+              const aisle = document.createElement('div');
+              aisle.className = 'aisle';
+              deckGridEl.appendChild(aisle);
+              continue;
+            }
+
+            if (currentSeatNum > deck.endId) {
+              const empty = document.createElement('div');
+              deckGridEl.appendChild(empty);
+              continue;
+            }
+
+            // Create Seat Wrapper & Seat
+            const wrapper = document.createElement('div');
+            wrapper.className = 'seat-wrapper';
+            
+            const seatEl = document.createElement('button');
+            seatEl.className = 'seat';
+            seatEl.dataset.seat = currentSeatNum;
+            seatEl.id = `seat-${currentSeatNum}`;
+            
+            seatEl.innerHTML = `
+              <div class="seat-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              </div>
+              <div class="seat-pillow"></div>
+            `;
+            
+            // Dynamic Pricing Logic
+            const fallbackPrice = c === 0 ? 1050 : 900;
+            const priceVal = dbPrices[currentSeatNum] ? dbPrices[currentSeatNum] : fallbackPrice;
+
+            const priceEl = document.createElement('div');
+            priceEl.className = 'seat-price';
+            
+            if (bus.bookedSeats.includes(currentSeatNum)) {
+              seatEl.classList.add('seat--booked');
+              seatEl.title = `Seat ${currentSeatNum} - Booked`;
+              seatEl.disabled = true;
+              priceEl.textContent = 'Sold';
+            } else if (externallyLockedSeats.includes(currentSeatNum)) {
+              seatEl.classList.add('seat--locked');
+              seatEl.title = `Seat ${currentSeatNum} - Locked`;
+              seatEl.disabled = true;
+              priceEl.textContent = 'Locked';
+            } else {
+              if (selectedSeats.includes(currentSeatNum)) {
+                seatEl.classList.add('seat--selected');
+              }
+              seatEl.title = `Seat ${currentSeatNum} - Available`;
+              priceEl.textContent = '₹' + priceVal;
+              
+              const boundSeatNum = currentSeatNum;
+              seatEl.addEventListener('click', () => toggleSeat(boundSeatNum));
+            }
+
+            if (isInitial) {
+              seatEl.disabled = true;
+              seatEl.style.opacity = '0.5';
+            }
+
+            wrapper.appendChild(seatEl);
+            wrapper.appendChild(priceEl);
+            deckGridEl.appendChild(wrapper);
+            
+            currentSeatNum++;
+          }
+        }
+        
+        deckEl.appendChild(deckGridEl);
+        decksContainer.appendChild(deckEl);
+      });
 
       if (!isInitial) updateSeatsSummary();
     }

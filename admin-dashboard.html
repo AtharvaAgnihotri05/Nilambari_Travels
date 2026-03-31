@@ -112,38 +112,27 @@
   <footer class="footer" id="footer"></footer>
 
   <!-- Scripts -->
+  <script src="js/api.js"></script>
   <script src="js/data.js"></script>
   <script src="js/components.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    let liveBuses = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
       initPageCommon('admin');
 
       // Check admin auth
-      if (!AppState.isAdminLoggedIn) {
+      if (!ApiClient.isLoggedIn()) {
         showToast('Please login first', 'error');
         setTimeout(() => window.location.href = 'admin-login.html', 1000);
         return;
       }
 
-      // Populate fleet table
-      const tbody = document.getElementById('fleet-table-body');
-      BUSES.forEach(bus => {
-        const row = document.createElement('tr');
-        row.style.borderBottom = '1px solid var(--border-glass)';
-        row.innerHTML = `
-          <td style="padding:var(--space-md) var(--space-lg); font-weight:600;">${bus.name}</td>
-          <td style="padding:var(--space-md) var(--space-lg);"><span class="badge badge--primary">${bus.type}</span></td>
-          <td style="padding:var(--space-md) var(--space-lg); color:var(--text-secondary);">${bus.departure} — ${bus.arrival}</td>
-          <td style="padding:var(--space-md) var(--space-lg); color:var(--primary-400); font-weight:700;">₹${bus.price}</td>
-          <td style="padding:var(--space-md) var(--space-lg);">⭐ ${bus.rating}</td>
-        `;
-        tbody.appendChild(row);
-      });
+      await loadLiveBuses();
 
       // Logout
       document.getElementById('logout-btn').addEventListener('click', () => {
-        AppState.isAdminLoggedIn = false;
-        AppState.save();
+        ApiClient.clearToken();
         showToast('Logged out successfully', 'info');
         setTimeout(() => window.location.href = 'admin-login.html', 800);
       });
@@ -159,132 +148,166 @@
       });
     });
 
-    // Modal content definitions
-    const modalContents = {
-      'add-bus': {
-        title: '🚌 Add New Bus',
-        body: `
-          <form onsubmit="event.preventDefault(); showToast('Bus added successfully! (UI only)','success'); closeModal();">
+    async function loadLiveBuses() {
+      const tbody = document.getElementById('fleet-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem;">Loading fleet data...</td></tr>';
+      
+      try {
+        const res = await ApiClient.getBuses();
+        if (res.success) {
+          liveBuses = res.data;
+          renderFleetTable();
+        } else {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--danger-400);">Failed to load fleet.</td></tr>';
+        }
+      } catch(err) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--danger-400);">Network error while loading fleet.</td></tr>';
+      }
+    }
+
+    function renderFleetTable() {
+      const tbody = document.getElementById('fleet-table-body');
+      tbody.innerHTML = '';
+      if(liveBuses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem;">No buses found in database.</td></tr>';
+        return;
+      }
+
+      liveBuses.forEach(bus => {
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid var(--border-glass)';
+        row.innerHTML = `
+          <td style="padding:var(--space-md) var(--space-lg); font-weight:600;">${bus.name}</td>
+          <td style="padding:var(--space-md) var(--space-lg);"><span class="badge badge--primary">${bus.type}</span></td>
+          <td style="padding:var(--space-md) var(--space-lg); color:var(--text-secondary);">${bus.amenities.join(', ')}</td>
+          <td style="padding:var(--space-md) var(--space-lg); color:var(--primary-400); font-weight:700;">₹${bus.price}</td>
+          <td style="padding:var(--space-md) var(--space-lg);">⭐ ${bus.rating}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Modal Builder
+    function openModal(type) {
+      const modalTitle = document.getElementById('modal-title');
+      const modalBody = document.getElementById('modal-body');
+
+      let optionsHtml = '<option value="">Choose a bus</option>';
+      liveBuses.forEach(b => {
+        optionsHtml += `<option value="${b._id}">${b.name}</option>`;
+      });
+
+      if (type === 'add-bus') {
+        modalTitle.textContent = '🚌 Add New Bus';
+        modalBody.innerHTML = `
+          <form id="admin-form-addBus">
             <div class="form-group">
               <label class="form-label">Bus Name</label>
-              <input type="text" class="form-input" placeholder="Enter bus name" required>
+              <input type="text" id="fm-add-name" class="form-input" placeholder="Enter bus name" required>
             </div>
             <div class="form-group">
               <label class="form-label">Bus Type</label>
-              <select class="form-select" required>
+              <select id="fm-add-type" class="form-select" required>
                 <option value="">Select type</option>
-                <option>AC Sleeper</option>
-                <option>AC Seater</option>
-                <option>Non-AC Sleeper</option>
-                <option>Non-AC Seater</option>
+                <option value="AC Sleeper">AC Sleeper</option>
+                <option value="AC Seater">AC Seater</option>
+                <option value="Non-AC Sleeper">Non-AC Sleeper</option>
+                <option value="Non-AC Seater">Non-AC Seater</option>
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Total Seats</label>
-              <input type="number" class="form-input" placeholder="e.g. 30" min="10" max="60" required>
+              <input type="number" id="fm-add-seats" class="form-input" placeholder="e.g. 30" min="10" max="60" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Base Price (₹)</label>
+              <input type="number" id="fm-add-price" class="form-input" placeholder="e.g. 900" min="100" required>
             </div>
             <button type="submit" class="btn btn--primary btn--block">Add Bus</button>
           </form>
-        `
-      },
-      'set-price': {
-        title: '💰 Set Seat Price',
-        body: `
-          <form onsubmit="event.preventDefault(); showToast('Prices updated! (UI only)','success'); closeModal();">
+        `;
+        document.getElementById('admin-form-addBus').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const btn = e.target.querySelector('button');
+          btn.disabled = true;
+          btn.textContent = 'Adding...';
+          
+          const payload = {
+            name: document.getElementById('fm-add-name').value,
+            type: document.getElementById('fm-add-type').value,
+            totalSeats: parseInt(document.getElementById('fm-add-seats').value),
+            price: parseInt(document.getElementById('fm-add-price').value),
+            amenities: ['Water Bottle']
+          };
+
+          const res = await ApiClient.createBus(payload);
+          if (res.success) {
+            showToast('Bus added successfully!', 'success');
+            await loadLiveBuses();
+            closeModal();
+          } else {
+            showToast(res.message || 'Failed to add bus', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Add Bus';
+          }
+        });
+      }
+      else if (type === 'set-price') {
+        modalTitle.textContent = '💰 Set Seat Price';
+        modalBody.innerHTML = `
+          <form id="admin-form-updatePrice">
             <div class="form-group">
               <label class="form-label">Select Bus</label>
-              <select class="form-select" required>
-                <option value="">Choose a bus</option>
-                ${BUSES.map(b => `<option>${b.name}</option>`).join('')}
-              </select>
+              <select id="fm-price-bus" class="form-select" required>${optionsHtml}</select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Seat Number(s) (e.g. 1, 4, 7)</label>
+              <input type="text" id="fm-price-seat" class="form-input" placeholder="Enter seat numbers" required>
             </div>
             <div class="form-group">
               <label class="form-label">New Price (₹)</label>
-              <input type="number" class="form-input" placeholder="Enter new price" min="100" required>
+              <input type="number" id="fm-price-val" class="form-input" placeholder="Enter new price" min="100" required>
             </div>
             <button type="submit" class="btn btn--primary btn--block">Update Price</button>
           </form>
-        `
-      },
-      'update-route': {
-        title: '🗺️ Update Route',
-        body: `
-          <form onsubmit="event.preventDefault(); showToast('Route updated! (UI only)','success'); closeModal();">
-            <div class="form-group">
-              <label class="form-label">Select Bus</label>
-              <select class="form-select" required>
-                <option value="">Choose a bus</option>
-                ${BUSES.map(b => `<option>${b.name}</option>`).join('')}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">New Source</label>
-              <select class="form-select" required>
-                <option value="">Select city</option>
-                ${CITIES.map(c => `<option>${c}</option>`).join('')}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">New Destination</label>
-              <select class="form-select" required>
-                <option value="">Select city</option>
-                ${CITIES.map(c => `<option>${c}</option>`).join('')}
-              </select>
-            </div>
-            <button type="submit" class="btn btn--primary btn--block">Update Route</button>
-          </form>
-        `
-      },
-      'change-timing': {
-        title: '🕐 Change Timing',
-        body: `
-          <form onsubmit="event.preventDefault(); showToast('Timing updated! (UI only)','success'); closeModal();">
-            <div class="form-group">
-              <label class="form-label">Select Bus</label>
-              <select class="form-select" required>
-                <option value="">Choose a bus</option>
-                ${BUSES.map(b => `<option>${b.name}</option>`).join('')}
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">New Departure Time</label>
-              <input type="time" class="form-input" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">New Arrival Time</label>
-              <input type="time" class="form-input" required>
-            </div>
-            <button type="submit" class="btn btn--primary btn--block">Update Timing</button>
-          </form>
-        `
-      },
-      'remove-bus': {
-        title: '🗑️ Remove Bus',
-        body: `
-          <div style="margin-bottom:var(--space-lg); padding:var(--space-md); background:rgba(239,68,68,0.08); border-radius:var(--radius-md); border:1px solid rgba(239,68,68,0.2);">
-            <p style="font-size:0.85rem; color:var(--danger-400);">⚠️ This action will permanently remove the selected bus from the fleet.</p>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:var(--space-md);">
-            ${BUSES.map(b => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:var(--space-md) var(--space-lg); background:var(--bg-glass); border:1px solid var(--border-glass); border-radius:var(--radius-md);">
-                <div>
-                  <div style="font-weight:600;">${b.name}</div>
-                  <div style="font-size:0.8rem; color:var(--text-muted);">${b.type} • ₹${b.price}</div>
-                </div>
-                <button class="btn btn--danger btn--sm" onclick="event.preventDefault(); showToast('${b.name} removed! (UI only)','success'); closeModal();">Remove</button>
-              </div>
-            `).join('')}
-          </div>
-        `
+        `;
+        document.getElementById('admin-form-updatePrice').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const btn = e.target.querySelector('button');
+          const busId = document.getElementById('fm-price-bus').value;
+          const seatsStr = document.getElementById('fm-price-seat').value;
+          const newPrice = parseInt(document.getElementById('fm-price-val').value);
+          
+          const bus = liveBuses.find(b => b._id === busId);
+          if(!bus) return;
+
+          btn.disabled = true;
+          btn.textContent = 'Updating...';
+
+          // parse seat numbers
+          const seatNums = seatsStr.split(',').map(s => s.trim()).filter(s => !!s);
+          const updatedPrices = { ...(bus.seatPrices || {}) };
+          seatNums.forEach(num => {
+            updatedPrices[num] = newPrice;
+          });
+
+          const res = await ApiClient.updateBus(busId, { seatPrices: updatedPrices });
+          if (res.success) {
+            showToast('Seat Prices updated!', 'success');
+            await loadLiveBuses();
+            closeModal();
+          } else {
+            showToast(res.message || 'Failed to update', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Update Price';
+          }
+        });
       }
-    };
+      else {
+         modalTitle.textContent = '⚠️ Feature Coming Soon';
+         modalBody.innerHTML = '<p style="text-align:center; color:var(--text-muted);">This feature is currently being integrated with the live system.</p>';
+      }
 
-    function openModal(type) {
-      const content = modalContents[type];
-      if (!content) return;
-
-      document.getElementById('modal-title').textContent = content.title;
-      document.getElementById('modal-body').innerHTML = content.body;
       document.getElementById('modal-overlay').classList.add('active');
     }
 

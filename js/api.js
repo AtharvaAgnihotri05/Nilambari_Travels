@@ -86,4 +86,24 @@ const ApiClient = {
     const qs = new URLSearchParams(params).toString();
     return this.authFetch(`/admin/bookings${qs ? '?' + qs : ''}`);
   },
+
+  // ─── Bus Management ───
+  async getBuses() {
+    const res = await fetch(`${API_BASE}/buses`);
+    return res.json();
+  },
+
+  async createBus(busData) {
+    return this.authFetch('/buses', {
+      method: 'POST',
+      body: JSON.stringify(busData)
+    });
+  },
+
+  async updateBus(busId, updateData) {
+    return this.authFetch(`/buses/${busId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData)
+    });
+  },
 };
